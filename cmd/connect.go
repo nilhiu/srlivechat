@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"github.com/nilhiu/srlivechat/client"
+	"github.com/nilhiu/srlivechat/server"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 )
@@ -29,16 +30,7 @@ var connectCmd = &cobra.Command{
 
 		log.Info().Msgf("connected to srlivechat server at %s as %s", serverHost, username)
 
-		go func() {
-			for {
-				msg, err := c.Read()
-				if err != nil {
-					log.Fatal().Msgf("failed to read from server, %s", err.Error())
-				}
-
-				fmt.Printf("[%s]: %s\n", msg.User, msg.Message)
-			}
-		}()
+		go messageHandler(c)
 
 		for {
 			scanner := bufio.NewScanner(os.Stdin)
@@ -60,4 +52,24 @@ func init() {
 	connectCmd.PersistentFlags().
 		StringVar(&serverHost, "host", "localhost:3000", "the server address to connect to")
 	rootCmd.AddCommand(connectCmd)
+}
+
+func messageHandler(c *client.Client) {
+	for {
+		msg, err := c.Read()
+		if err != nil {
+			log.Fatal().Msgf("failed to read from server, %s", err.Error())
+		}
+
+		switch msg.Type() {
+		case server.UserMessage:
+			fmt.Printf("[%s]: %s\n", msg.Sender(), msg.Message())
+		case server.ServerMessage:
+			fmt.Printf("<SERVER>: %s\n", msg.Message())
+		case server.ConnectMessage:
+			fmt.Printf("<CONNECTED>: %s\n", msg.Sender())
+		case server.DisconnectMessage:
+			fmt.Printf("<DISCONNECTED>: %s\n", msg.Sender())
+		}
+	}
 }

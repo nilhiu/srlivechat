@@ -22,6 +22,10 @@ func New(addr, name string) (*Client, error) {
 		return nil, err
 	}
 
+	if err := conn.WriteJSON(server.NewConnectMessage(name)); err != nil {
+		return nil, err
+	}
+
 	return &Client{
 		conn: conn,
 		name: name,
@@ -29,21 +33,19 @@ func New(addr, name string) (*Client, error) {
 }
 
 func (c *Client) Close() {
+	_ = c.conn.WriteJSON(server.NewDisconnectMessage(c.name))
 	c.conn.Close()
 }
 
 func (c *Client) Read() (server.Message, error) {
-	var msg server.Message
-	if err := c.conn.ReadJSON(&msg); err != nil {
-		return server.Message{}, err
+	msg, err := server.ReadMessage(c.conn)
+	if err != nil {
+		return nil, err
 	}
 
 	return msg, nil
 }
 
 func (c *Client) Write(msg string) error {
-	return c.conn.WriteJSON(server.Message{
-		User:    c.name,
-		Message: msg,
-	})
+	return c.conn.WriteJSON(server.NewUserMessage(c.name, msg))
 }
