@@ -7,6 +7,7 @@ import (
 	"net"
 	"os"
 
+	"github.com/fatih/color"
 	"github.com/nilhiu/srlivechat/client"
 	"github.com/nilhiu/srlivechat/server"
 	"github.com/rs/zerolog/log"
@@ -64,6 +65,11 @@ func init() {
 }
 
 func messageHandler(c *client.Client) {
+	colorUser := color.New(color.Bold, color.FgCyan)
+	colorConnect := color.New(color.Bold, color.FgGreen)
+	colorDisconnect := color.New(color.Bold, color.FgRed)
+	colorServer := color.New(color.Bold, color.FgMagenta)
+
 	for {
 		msg, err := c.Read()
 		if err != nil {
@@ -75,16 +81,20 @@ func messageHandler(c *client.Client) {
 
 		switch msg.Type() {
 		case server.UserMessage:
-			fmt.Printf("[%s]: %s\n", msg.Sender(), msg.Message())
+			userText := colorUser.Sprintf("[%s]:", msg.Sender())
+			fmt.Printf("%s %s\n", userText, msg.Message())
 		case server.ServerMessage:
-			fmt.Printf("<SERVER>: %s\n", msg.Message())
+			svrText := colorServer.Sprint("<SERVER>:")
+			fmt.Printf("%s %s\n", svrText, msg.Message())
 			if msg.Sender() == "SHUTDOWN" {
 				os.Exit(0)
 			}
 		case server.ConnectMessage:
-			fmt.Printf("<CONNECTED>: %s\n", msg.Sender())
+			connText := colorConnect.Sprint("<CONNECTED>:")
+			fmt.Printf("%s %s\n", connText, msg.Sender())
 		case server.DisconnectMessage:
-			fmt.Printf("<DISCONNECTED>: %s\n", msg.Sender())
+			disconnText := colorDisconnect.Sprint("<DISCONNECTED>:")
+			fmt.Printf("%s %s\n", disconnText, msg.Sender())
 		}
 	}
 }
