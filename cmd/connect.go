@@ -2,7 +2,9 @@ package cmd
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
+	"net"
 	"os"
 
 	"github.com/nilhiu/srlivechat/client"
@@ -29,6 +31,13 @@ var connectCmd = &cobra.Command{
 		defer c.Close()
 
 		log.Info().Msgf("connected to srlivechat server at %s as %s", serverHost, username)
+
+		go func() {
+			<-cmd.Context().Done()
+			log.Info().Msg("interrupt detected, ending client session...")
+			c.Close()
+			os.Exit(0)
+		}()
 
 		go messageHandler(c)
 
@@ -58,6 +67,9 @@ func messageHandler(c *client.Client) {
 	for {
 		msg, err := c.Read()
 		if err != nil {
+			if errors.Is(err, net.ErrClosed) {
+				return
+			}
 			log.Fatal().Msgf("failed to read from server, %s", err.Error())
 		}
 
@@ -66,6 +78,9 @@ func messageHandler(c *client.Client) {
 			fmt.Printf("[%s]: %s\n", msg.Sender(), msg.Message())
 		case server.ServerMessage:
 			fmt.Printf("<SERVER>: %s\n", msg.Message())
+			if msg.Sender() == "SHUTDOWN" {
+				os.Exit(0)
+			}
 		case server.ConnectMessage:
 			fmt.Printf("<CONNECTED>: %s\n", msg.Sender())
 		case server.DisconnectMessage:

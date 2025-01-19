@@ -18,7 +18,7 @@ var startCmd = &cobra.Command{
 
 		log.Info().Msgf("starting srlivechat server at port %s", port)
 
-		if err := srv.Run(); err != nil {
+		if err := srv.Run(cmd.Context()); err != nil {
 			log.Fatal().Msgf("server error: %s", err.Error())
 		}
 	},

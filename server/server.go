@@ -1,12 +1,12 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
-	"os/signal"
-	"syscall"
+	"time"
 
 	"github.com/olahol/melody"
 	"github.com/rs/zerolog/log"
@@ -24,7 +24,7 @@ func New(addr string) *Server {
 	}
 }
 
-func (s *Server) Run() error {
+func (s *Server) Run(ctx context.Context) error {
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if err := s.sock.HandleRequest(w, r); err != nil {
 			errMsg, _ := json.Marshal(
@@ -42,14 +42,17 @@ func (s *Server) Run() error {
 		_ = s.sock.Broadcast(msg)
 	})
 
-	sigs := make(chan os.Signal, 1)
-	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
 	go func() {
-		<-sigs
+		<-ctx.Done()
 		shutDownMsg, _ := json.Marshal(
 			newServerMessage("SHUTDOWN", "the server is shutting down..."),
 		)
+
 		_ = s.sock.Broadcast(shutDownMsg)
+		s.sock.Close()
+
+		log.Info().Msg("interrupt detected, ending server session...")
+		time.Sleep(100 * time.Millisecond)
 		os.Exit(0)
 	}()
 
