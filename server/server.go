@@ -51,8 +51,10 @@ func (s *Server) Run(ctx context.Context) error {
 		_ = s.sock.Broadcast(shutDownMsg)
 		s.sock.Close()
 
-		log.Info().Msg("interrupt detected, ending server session...")
-		time.Sleep(100 * time.Millisecond)
+		for i := 3; i > 0; i-- {
+			log.Info().Msgf("interrupt detected, ending server session in %d...", i)
+			time.Sleep(time.Second)
+		}
 		os.Exit(0)
 	}()
 
