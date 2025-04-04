@@ -1,12 +1,11 @@
-# Speedrunning roadmap.sh Broadcast Server
+# SRLiveChat
 
-The following code is a solution to [roadmap.sh](https://roadmap.sh)'s
-[Broadcast Server](https://roadmap.sh/projects/broadcast-server) project,
-written in Go.
+SRLiveChat is a simple CLI chat program utilizing WebSockets to provide
+real-time messaging in a network.
 
-It uses the [Melody](https://github.com/olahol/melody) library for setting up
-the WebSocket server, and uses the [Gorilla's WebSocket library](https://github.com/gorilla/websocket)
-for the client side.
+It uses [Melody](https://github.com/olahol/melody) for setting up the WebSocket
+server, and uses the [Gorilla's WebSocket library](https://github.com/gorilla/websocket)
+for the client-side connections.
 
 The CLI is made with [Cobra](https://cobra.dev).
 
@@ -35,7 +34,7 @@ By default, the server uses port `3000`. If you want to change that, use the
 srlivechat start --port 3030
 ```
 
-To shutdown the server, simply press <kbd>Control</kbd> + <kbd>C</kbd>. This
+To shut down the server, simply press <kbd>Control</kbd> + <kbd>C</kbd>. This
 will also send a shutdown message to all clients.
 
 ### Client
@@ -61,3 +60,9 @@ srlivechat start --username nilhiu
 
 To disconnect and exit, simply press <kbd>Control</kbd> + <kbd>C</kbd>. This
 will also send a disconnection message to the server to broadcast.
+
+## Acknowledgements
+
+This project is a solution to [roadmap.sh](https://roadmap.sh)'s
+[Broadcast Server](https://roadmap.sh/projects/broadcast-server) project, with
+additional features added on top of it.
