@@ -86,8 +86,11 @@ func messageHandler(c *client.Client) {
 		case server.ServerMessage:
 			svrText := colorServer.Sprint("<SERVER>:")
 			fmt.Printf("%s %s\n", svrText, msg.Message())
-			if msg.Sender() == "SHUTDOWN" {
+			switch msg.Sender() {
+			case "SHUTDOWN":
 				os.Exit(0)
+			case "CONFLICT":
+				os.Exit(1)
 			}
 		case server.ConnectMessage:
 			connText := colorConnect.Sprint("<CONNECTED>:")

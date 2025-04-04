@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"slices"
 	"time"
 
 	"github.com/olahol/melody"
@@ -13,8 +14,9 @@ import (
 )
 
 type Server struct {
-	sock *melody.Melody
-	addr string
+	sock  *melody.Melody
+	addr  string
+	users []string
 }
 
 func New(addr string) *Server {
@@ -38,6 +40,28 @@ func (s *Server) Run(ctx context.Context) error {
 	})
 
 	s.sock.HandleMessage(func(session *melody.Session, msg []byte) {
+		var m internalMessage
+		if err := json.Unmarshal(msg, &m); err != nil {
+			log.Error().Msgf("failed to read message: %s, (%s)", msg[:len(msg)-1], err.Error())
+			return
+		}
+
+		switch m.MsgType {
+		case ConnectMessage:
+			if slices.Contains(s.users, m.User) {
+				cMsg, _ := json.Marshal(
+					newServerMessage("CONFLICT", "user with that username already in chat"),
+				)
+				session.Write(cMsg)
+				time.Sleep(time.Second)
+				session.Close()
+				return
+			}
+			s.users = append(s.users, m.User)
+		case DisconnectMessage:
+			s.users = slices.DeleteFunc(s.users, func(u string) bool { return u == m.User })
+		}
+
 		log.Info().Msgf("broadcasting message: %s", msg[:len(msg)-1])
 		_ = s.sock.Broadcast(msg)
 	})
