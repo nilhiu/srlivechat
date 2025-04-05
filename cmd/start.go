@@ -14,11 +14,11 @@ var startCmd = &cobra.Command{
 	Short: "starts a srlivechat server",
 	Long:  `starts a srlivechat users can connect to using the "srlivechat connect" command.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		srv := server.New(port)
+		srv := server.New(cmd.Context(), port)
 
 		log.Info().Msgf("starting srlivechat server at port %s", port)
 
-		if err := srv.Run(cmd.Context()); err != nil {
+		if err := srv.Run(); err != nil {
 			log.Fatal().Msgf("server error: %s", err.Error())
 		}
 	},
