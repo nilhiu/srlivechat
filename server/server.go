@@ -60,11 +60,10 @@ func (s *Server) MessageHandler(session *melody.Session, msg []byte) {
 		s.HandleConnection(session, m.User)
 	case DisconnectMessage:
 		s.HandleDisconnection(session, m.User)
-	case UserMessage:
-		s.sock.Broadcast(msg)
 	}
 
 	log.Info().Msgf("broadcasting message: %s", msg[:len(msg)-1])
+	s.sock.Broadcast(msg)
 }
 
 func (s *Server) ShutdownHandler() {
