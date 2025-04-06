@@ -1,15 +1,8 @@
 package cmd
 
 import (
-	"bufio"
-	"errors"
-	"fmt"
-	"net"
-	"os"
-
-	"github.com/fatih/color"
 	"github.com/nilhiu/srlivechat/client"
-	"github.com/nilhiu/srlivechat/server"
+	"github.com/nilhiu/srlivechat/tui"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 )
@@ -31,28 +24,7 @@ var connectCmd = &cobra.Command{
 		}
 		defer c.Close()
 
-		log.Info().Msgf("connected to srlivechat server at %s as %s", serverHost, username)
-
-		go func() {
-			<-cmd.Context().Done()
-			log.Info().Msg("interrupt detected, ending client session...")
-			c.Close()
-			os.Exit(0)
-		}()
-
-		go messageHandler(c)
-
-		for {
-			scanner := bufio.NewScanner(os.Stdin)
-			scanner.Scan()
-			if scanner.Err() != nil {
-				log.Error().Msgf("could not read written message, %s", err.Error())
-			}
-
-			if err := c.Write(scanner.Text()); err != nil {
-				panic(err)
-			}
-		}
+		tui.New(cmd.Context(), c).Run()
 	},
 }
 
@@ -62,42 +34,4 @@ func init() {
 	connectCmd.PersistentFlags().
 		StringVar(&serverHost, "host", "localhost:3000", "the server address to connect to")
 	rootCmd.AddCommand(connectCmd)
-}
-
-func messageHandler(c *client.Client) {
-	colorUser := color.New(color.Bold, color.FgCyan)
-	colorConnect := color.New(color.Bold, color.FgGreen)
-	colorDisconnect := color.New(color.Bold, color.FgRed)
-	colorServer := color.New(color.Bold, color.FgMagenta)
-
-	for {
-		msg, err := c.Read()
-		if err != nil {
-			if errors.Is(err, net.ErrClosed) {
-				return
-			}
-			log.Fatal().Msgf("failed to read from server, %s", err.Error())
-		}
-
-		switch msg.Type() {
-		case server.UserMessage:
-			userText := colorUser.Sprintf("[%s]:", msg.Sender())
-			fmt.Printf("%s %s\n", userText, msg.Message())
-		case server.ServerMessage:
-			svrText := colorServer.Sprint("<SERVER>:")
-			fmt.Printf("%s %s\n", svrText, msg.Message())
-			switch msg.Sender() {
-			case "SHUTDOWN":
-				os.Exit(0)
-			case "CONFLICT":
-				os.Exit(1)
-			}
-		case server.ConnectMessage:
-			connText := colorConnect.Sprint("<CONNECTED>:")
-			fmt.Printf("%s %s\n", connText, msg.Sender())
-		case server.DisconnectMessage:
-			disconnText := colorDisconnect.Sprint("<DISCONNECTED>:")
-			fmt.Printf("%s %s\n", disconnText, msg.Sender())
-		}
-	}
 }
