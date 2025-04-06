@@ -1,24 +1,17 @@
 package tui
 
 import (
-	"bufio"
 	"context"
-	"errors"
 	"fmt"
-	"net"
-	"os"
+	"strings"
 
-	"github.com/fatih/color"
+	"github.com/charmbracelet/bubbles/textinput"
+	"github.com/charmbracelet/bubbles/viewport"
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/nilhiu/srlivechat/client"
 	"github.com/nilhiu/srlivechat/server"
 	"github.com/rs/zerolog/log"
-)
-
-var (
-	colorUser       = color.New(color.Bold, color.FgCyan)
-	colorConnect    = color.New(color.Bold, color.FgGreen)
-	colorDisconnect = color.New(color.Bold, color.FgRed)
-	colorServer     = color.New(color.Bold, color.FgMagenta)
 )
 
 type TUI interface {
@@ -29,83 +22,183 @@ func New(ctx context.Context, c *client.Client) TUI {
 	return &tui{
 		ctx: ctx,
 		c:   c,
+		p:   tea.NewProgram(initialModel(c), tea.WithAltScreen()),
 	}
 }
 
 type tui struct {
 	ctx context.Context
 	c   *client.Client
+	p   *tea.Program
 }
 
 func (t *tui) Run() {
-	go t.shutdownHandler()
-	go t.messageHandler()
-
-	for {
-		scanner := bufio.NewScanner(os.Stdin)
-		scanner.Scan()
-		if err := scanner.Err(); err != nil {
-			log.Error().Msgf("could not read written message, %s", err.Error())
-		}
-
-		if err := t.c.Write(scanner.Text()); err != nil {
-			panic(err)
-		}
-	}
-}
-
-func (t *tui) shutdownHandler() {
-	<-t.ctx.Done()
-	log.Info().Msg("interrupt detected, ending client session...")
-	t.c.Close()
-	os.Exit(0)
-}
-
-func (t *tui) messageHandler() {
-	for {
-		msg, err := t.c.Read()
-		if err != nil {
-			if errors.Is(err, net.ErrClosed) {
+	go func() {
+		for {
+			msg, err := t.c.Read()
+			if err != nil {
+				t.p.Send(err)
 				return
 			}
-			log.Fatal().Msgf("failed to read from server, %s", err.Error())
-		}
 
-		switch msg.Type() {
-		case server.UserMessage:
-			t.userMessageHandler(msg)
-		case server.ServerMessage:
-			t.serverMessageHandler(msg)
-		case server.ConnectMessage:
-			t.connectMessageHandler(msg)
-		case server.DisconnectMessage:
-			t.disconnectMessageHandler(msg)
+			t.p.Send(msg)
 		}
+	}()
+
+	if _, err := t.p.Run(); err != nil {
+		log.Fatal().Err(err)
 	}
 }
 
-func (t *tui) userMessageHandler(msg server.Message) {
-	userText := colorUser.Sprintf("[%s]:", msg.Sender())
-	fmt.Printf("%s %s\n", userText, msg.Message())
+type model struct {
+	c    *client.Client
+	vp   viewport.Model
+	msgs []string
+	ti   textinput.Model
+
+	sentStyle lipgloss.Style
+	recvStyle lipgloss.Style
 }
 
-func (t *tui) serverMessageHandler(msg server.Message) {
-	svrText := colorServer.Sprint("<SERVER>:")
-	fmt.Printf("%s %s\n", svrText, msg.Message())
-	switch msg.Sender() {
-	case "SHUTDOWN":
-		os.Exit(0)
-	case "CONFLICT":
-		os.Exit(1)
+func initialModel(c *client.Client) model {
+	tea.WindowSize()
+
+	ti := textinput.New()
+	ti.Placeholder = "Type a message..."
+	ti.Prompt = lipgloss.NewStyle().Foreground(lipgloss.Color("3")).Render("> ")
+	ti.CharLimit = 64
+	ti.Width = 30
+	ti.Focus()
+
+	vp := viewport.New(30, 10)
+	vp.KeyMap = viewport.KeyMap{}
+
+	return model{
+		c:    c,
+		vp:   vp,
+		msgs: []string{},
+		ti:   ti,
+
+		sentStyle: lipgloss.NewStyle().Foreground(lipgloss.Color("11")),
+		recvStyle: lipgloss.NewStyle().Foreground(lipgloss.Color("10")),
 	}
 }
 
-func (t *tui) connectMessageHandler(msg server.Message) {
-	connText := colorConnect.Sprint("<CONNECTED>:")
-	fmt.Printf("%s %s\n", connText, msg.Sender())
+func (m model) Init() tea.Cmd {
+	return textinput.Blink
 }
 
-func (t *tui) disconnectMessageHandler(msg server.Message) {
-	disconnText := colorDisconnect.Sprint("<DISCONNECTED>:")
-	fmt.Printf("%s %s\n", disconnText, msg.Sender())
+func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	var (
+		tiCmd tea.Cmd
+		vpCmd tea.Cmd
+	)
+
+	m.ti, tiCmd = m.ti.Update(msg)
+	m.vp, vpCmd = m.vp.Update(msg)
+
+	switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		m.vp.Width = msg.Width
+		m.ti.Width = msg.Width - 5
+		m.vp.Height = msg.Height - 3
+
+		if len(m.msgs) > 0 {
+			m.vp.SetContent(strings.Join(m.msgs, "\n"))
+		}
+		m.vp.GotoBottom()
+	case tea.KeyMsg:
+		switch msg.Type {
+		case tea.KeyCtrlC, tea.KeyEsc:
+			return m, tea.Quit
+		case tea.KeyEnter:
+			m.c.Write(m.ti.Value())
+			m.ti.Reset()
+			m.vp.GotoBottom()
+		}
+	case server.Message:
+		m.messageHandler(msg)
+	case error:
+		m.errorHandler(msg)
+	}
+
+	return m, tea.Batch(tiCmd, vpCmd)
+}
+
+func (m model) View() string {
+	tiView := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("3")).
+		Render(m.ti.View())
+
+	return lipgloss.JoinVertical(
+		lipgloss.Left,
+		m.vp.View(),
+		tiView,
+	)
+}
+
+func (m *model) errorHandler(err error) {
+	m.msgs = append(
+		m.msgs,
+		lipgloss.NewStyle().
+			Foreground(lipgloss.Color("0")).
+			Background(lipgloss.Color("1")).
+			Width(m.vp.Width).
+			Render("<ERROR>: "+err.Error()),
+	)
+
+	m.ti.Reset()
+	m.ti.Placeholder = "Not able to send messages, please restart."
+	m.ti.Blur()
+
+	m.vp.SetContent(strings.Join(m.msgs, "\n"))
+	m.vp.GotoBottom()
+}
+
+func (m *model) messageHandler(msg server.Message) {
+	switch msg.Type() {
+	case server.ConnectMessage:
+		m.msgs = append(
+			m.msgs,
+			lipgloss.NewStyle().
+				Foreground(lipgloss.Color("2")).
+				Render("<CONNECTED>: "+msg.Sender()),
+		)
+	case server.DisconnectMessage:
+		m.msgs = append(
+			m.msgs,
+			lipgloss.NewStyle().
+				Foreground(lipgloss.Color("1")).
+				Render("<DISCONNECTED>: "+msg.Sender()),
+		)
+	case server.UserMessage:
+		m.userMessageHandler(msg)
+	case server.ServerMessage:
+		m.msgs = append(
+			m.msgs,
+			lipgloss.NewStyle().
+				Foreground(lipgloss.Color("0")).
+				Background(lipgloss.Color("5")).
+				Width(m.vp.Width).
+				Render("<SERVER>: "+msg.Message()),
+		)
+	}
+
+	m.vp.SetContent(strings.Join(m.msgs, "\n"))
+	m.vp.GotoBottom()
+}
+
+func (m *model) userMessageHandler(msg server.Message) {
+	if msg.Sender() == m.c.Name() {
+		m.msgs = append(
+			m.msgs,
+			fmt.Sprintf("%s: %s", m.sentStyle.Render(msg.Sender()), msg.Message()),
+		)
+	} else {
+		m.msgs = append(
+			m.msgs,
+			fmt.Sprintf("%s: %s", m.recvStyle.Render(msg.Sender()), msg.Message()),
+		)
+	}
 }

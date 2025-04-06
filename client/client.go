@@ -32,6 +32,10 @@ func New(addr, name string) (*Client, error) {
 	}, nil
 }
 
+func (c *Client) Name() string {
+	return c.name
+}
+
 func (c *Client) Close() {
 	_ = c.conn.WriteJSON(server.NewDisconnectMessage(c.name))
 	c.conn.Close()
