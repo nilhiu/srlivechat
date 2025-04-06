@@ -1,13 +1,14 @@
 # SRLiveChat
 
-SRLiveChat is a simple CLI chat program utilizing WebSockets to provide
+SRLiveChat is a simple CLI/TUI chat program utilizing WebSockets to provide
 real-time messaging in a network.
 
 It uses [Melody](https://github.com/olahol/melody) for setting up the WebSocket
 server, and uses the [Gorilla's WebSocket library](https://github.com/gorilla/websocket)
 for the client-side connections.
 
-The CLI is made with [Cobra](https://cobra.dev).
+The CLI is made with [Cobra](https://cobra.dev), and the client TUI is created
+with [Bubble Tea](https://github.com/charmbracelet/bubbletea).
 
 ## Building
 
@@ -65,4 +66,5 @@ will also send a disconnection message to the server to broadcast.
 
 This project is a solution to [roadmap.sh](https://roadmap.sh)'s
 [Broadcast Server](https://roadmap.sh/projects/broadcast-server) project, with
-additional features added on top of it.
+additional features and a more robust client TUI implementation added on top of
+it.
